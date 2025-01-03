@@ -23,6 +23,7 @@ set(SOURCES
     src/thread_manager.cpp
     src/sender.cpp
     src/receiver.cpp
+    src/thread_context.cpp
 )
 
 # Collect header files
@@ -31,6 +32,7 @@ set(HEADERS
     include/thread_manager.h
     include/sender.h
     include/receiver.h
+    include/thread_context.h
 )
 
 # Add executable
