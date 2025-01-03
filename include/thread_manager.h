@@ -5,13 +5,16 @@
 #include "message_channel.h"
 #include "sender.h"
 #include "receiver.h"
+#include "i_thread_manager.h"
 
-class thread_manager {
+class thread_manager : public i_thread_manager {
 public:
     thread_manager();
     ~thread_manager();
-    void start_threads();
-    void print_metrics() const;
+    
+    void start_threads() override;
+    void stop_threads() override;
+    void print_metrics() const override;
 
 private:
     std::shared_ptr<message_channel> channel;

@@ -2,37 +2,52 @@
 #include <iostream>
 #include <chrono>
 #include <vector>
+#include <thread>
 
 sender::sender(std::shared_ptr<message_channel> channel, std::atomic<bool>& running)
     : channel(channel), running(running) {}
+
+bool sender::send_message(const message& msg) {
+    std::unique_lock<std::mutex> lock(channel->mutex);
+    if (channel->messages.size() >= channel->MAX_QUEUE_SIZE) {
+        return false;
+    }
+    channel->messages.push(msg);
+    lock.unlock();
+    channel->cv.notify_one();
+    return true;
+}
+
+bool sender::send_batch(const std::vector<message>& messages) {
+    std::unique_lock<std::mutex> lock(channel->mutex);
+    if (channel->messages.size() + messages.size() > channel->MAX_QUEUE_SIZE) {
+        return false;
+    }
+    for (const auto& msg : messages) {
+        channel->messages.push(msg);
+    }
+    lock.unlock();
+    channel->cv.notify_one();
+    return true;
+}
 
 void sender::operator()() {
     size_t message_count = 0;
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    while (running && message_count < 1000000) {  // Send 1M messages
-        std::vector<std::string> batch;
+    while (running && message_count < 1000000) {
+        std::vector<message> batch;
         batch.reserve(BATCH_SIZE);
 
-        // Prepare batch
         for (size_t i = 0; i < BATCH_SIZE && running && message_count < 1000000; ++i) {
-            batch.push_back("Message " + std::to_string(message_count++));
+            // Updated to use new member names
+            batch.emplace_back(1, message_count, "Message " + std::to_string(message_count));
+            message_count++;
         }
 
-        // Send batch
-        {
-            std::unique_lock<std::mutex> lock(channel->mutex);
-            channel->cv.wait(lock, [this]() { 
-                return channel->messages.size() < channel->MAX_QUEUE_SIZE || !running; 
-            });
-
-            if (!running) break;
-
-            for (auto& msg : batch) {
-                channel->messages.push(std::move(msg));
-            }
+        while (!send_batch(batch) && running) {
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
-        channel->cv.notify_one();  // Notify receiver
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();

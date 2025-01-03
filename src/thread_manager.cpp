@@ -7,15 +7,19 @@ thread_manager::thread_manager()
       msg_receiver(channel, running) {}
 
 thread_manager::~thread_manager() {
-    running = false;
-    channel->cv.notify_all();  // Wake up any waiting threads
-    if (sender_thread.joinable()) sender_thread.join();
-    if (receiver_thread.joinable()) receiver_thread.join();
+    stop_threads();
 }
 
 void thread_manager::start_threads() {
     sender_thread = std::thread(std::ref(msg_sender));
     receiver_thread = std::thread(std::ref(msg_receiver));
+}
+
+void thread_manager::stop_threads() {
+    running = false;
+    channel->cv.notify_all();
+    if (sender_thread.joinable()) sender_thread.join();
+    if (receiver_thread.joinable()) receiver_thread.join();
 }
 
 void thread_manager::print_metrics() const {
