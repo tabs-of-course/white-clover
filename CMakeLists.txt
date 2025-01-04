@@ -24,15 +24,22 @@ set(SOURCES
     src/sender.cpp
     src/receiver.cpp
     src/thread_context.cpp
+    src/key_monitor_context.cpp
 )
 
 # Collect header files
 set(HEADERS
+    include/message_types.h
     include/message_channel.h
+    include/i_sender.h
+    include/i_receiver.h
+    include/i_thread_manager.h
+    include/i_thread_context.h
     include/thread_manager.h
     include/sender.h
     include/receiver.h
     include/thread_context.h
+    include/key_monitor_context.h
 )
 
 # Add executable
@@ -44,11 +51,28 @@ target_include_directories(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# Link against pthread
-target_link_libraries(${PROJECT_NAME}
-    PRIVATE
-        Threads::Threads
-)
+# Windows-specific settings
+if(WIN32)
+    target_compile_definitions(${PROJECT_NAME} 
+        PRIVATE 
+        NOMINMAX  # Prevents Windows.h from defining min/max macros
+        WIN32_LEAN_AND_MEAN  # Reduces Windows.h overhead
+    )
+    
+    # Link Windows libraries
+    target_link_libraries(${PROJECT_NAME}
+        PRIVATE
+            Threads::Threads
+            user32  # For keyboard input functions
+            gdi32   # Required by some Windows API functions
+    )
+else()
+    # Non-Windows systems just need pthread
+    target_link_libraries(${PROJECT_NAME}
+        PRIVATE
+            Threads::Threads
+    )
+endif()
 
 # Install rules
 install(TARGETS ${PROJECT_NAME}
@@ -72,4 +96,7 @@ message(STATUS "Project configuration:")
 message(STATUS "  C++ Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "  Install prefix: ${CMAKE_INSTALL_PREFIX}")
+if(WIN32)
+    message(STATUS "  Windows libraries: user32, gdi32")
+endif()
 message(STATUS "")

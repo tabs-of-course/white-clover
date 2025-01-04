@@ -48,7 +48,7 @@ void thread_context::operator()() {
 
         if (received.empty()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            print_metrics(); // Print metrics periodically when idle
+            // print_metrics(); // Print metrics periodically when idle
         }
     }
 }
