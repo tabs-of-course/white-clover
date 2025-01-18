@@ -2,6 +2,15 @@
 cmake_minimum_required(VERSION 3.15)
 project(white-clover VERSION 1.0)
 
+include(FetchContent)
+
+# Fetch nlohmann/json
+FetchContent_Declare(json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.2
+)
+FetchContent_MakeAvailable(json)
+
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,6 +34,9 @@ set(SOURCES
     src/receiver.cpp
     src/thread_context.cpp
     src/key_monitor_context.cpp
+    src/input_sender_context.cpp
+    src/process_manager.cpp
+    src/settings_manager.cpp
 )
 
 # Collect header files
@@ -35,11 +47,15 @@ set(HEADERS
     include/i_receiver.h
     include/i_thread_manager.h
     include/i_thread_context.h
+    include/i_process_manager.h     
     include/thread_manager.h
     include/sender.h
     include/receiver.h
     include/thread_context.h
     include/key_monitor_context.h
+    include/input_sender_context.h
+    include/process_manager.h
+    include/settings_manager.h
 )
 
 # Add executable
@@ -51,26 +67,25 @@ target_include_directories(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+# Link libraries
+target_link_libraries(${PROJECT_NAME}
+    PRIVATE
+        Threads::Threads
+        nlohmann_json::nlohmann_json
+)
+
 # Windows-specific settings
 if(WIN32)
     target_compile_definitions(${PROJECT_NAME} 
         PRIVATE 
-        NOMINMAX  # Prevents Windows.h from defining min/max macros
-        WIN32_LEAN_AND_MEAN  # Reduces Windows.h overhead
+        NOMINMAX
+        WIN32_LEAN_AND_MEAN
     )
     
-    # Link Windows libraries
     target_link_libraries(${PROJECT_NAME}
         PRIVATE
-            Threads::Threads
-            user32  # For keyboard input functions
-            gdi32   # Required by some Windows API functions
-    )
-else()
-    # Non-Windows systems just need pthread
-    target_link_libraries(${PROJECT_NAME}
-        PRIVATE
-            Threads::Threads
+            user32
+            gdi32
     )
 endif()
 

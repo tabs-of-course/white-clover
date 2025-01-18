@@ -1,4 +1,5 @@
 #include "key_monitor_context.h"
+#include "settings_manager.h"
 #include <iostream>
 #include <sstream>
 
@@ -14,8 +15,11 @@ key_monitor_context::key_monitor_context(std::shared_ptr<message_channel> outbou
 }
 
 void key_monitor_context::operator()() {
-    std::cout << "Key monitor thread started" << std::endl;
+    std::cout << "Key monitor thread started - Monitoring for key presses..." << std::endl;
     uint32_t msg_id = 0;
+
+    // Get key bindings
+    const auto& key_bindings = SettingsManager::getInstance().getKeyBindings();
 
     // Array to store key states
     bool previous_state[256] = {false};
@@ -29,27 +33,35 @@ void key_monitor_context::operator()() {
             if (current_state && !previous_state[vk]) {
                 std::string key_name = get_key_name(vk);
                 if (!key_name.empty()) {
-                    std::cout << "Key detected: " << key_name << std::endl;
-                    
-                    // Create and send message about key press
-                    message key_msg(2, msg_id++, "Key pressed: " + key_name);
-                    if (msg_sender.send_message(key_msg)) {
-                        messages_sent++;
-                        keys_processed++;
+                    std::cout << "\nKey detected:\n"
+                             << "  Virtual Key: 0x" << std::hex << vk << std::dec << "\n"
+                             << "  Key Name: " << key_name << "\n";
+
+                    // Find matching key binding
+                    for (const auto& binding : key_bindings) {
+                        if (binding.key == key_name) {
+                            // Create and send message with routing information
+                            message key_msg(2, msg_id++, "Key pressed: " + key_name,
+                                         binding.target_process, 
+                                         binding.instance.value_or(-1));
+
+                            if (msg_sender.send_message(key_msg)) {
+                                messages_sent++;
+                                keys_processed++;
+                                std::cout << "  Message sent to process " 
+                                          << binding.target_process 
+                                          << " instance " 
+                                          << (binding.instance.has_value() ? std::to_string(binding.instance.value()) : "all")
+                                          << " (ID: " << msg_id - 1 << ")\n";
+                            }
+                            break;  // Found the binding, no need to check others
+                        }
                     }
                 }
             }
             previous_state[vk] = current_state;
         }
-
-        // Process any incoming messages
-        auto received = msg_receiver.receive_batch(10);
-        for (const auto& msg : received) {
-            process_message(msg);
-        }
-
-        // Very short sleep to prevent excessive CPU usage
-        Sleep(1);  // 1ms sleep instead of 10ms
+        Sleep(1);
     }
 }
 
@@ -100,13 +112,10 @@ std::string key_monitor_context::get_key_name(DWORD vk_code) {
         case VK_RIGHT: return "Right";
         case VK_DOWN: return "Down";
         default:
-            // For standard keys, get the key name from Windows
-            UINT scan_code = MapVirtualKey(vk_code, MAPVK_VK_TO_VSC);
-            if (scan_code == 0) return "";
-
-            char key_name[32];
-            if (GetKeyNameTextA(scan_code << 16, key_name, sizeof(key_name)) > 0) {
-                return std::string(key_name);
+            // For standard keys
+            if ((vk_code >= '0' && vk_code <= '9') || 
+                (vk_code >= 'A' && vk_code <= 'Z')) {
+                return std::string(1, (char)vk_code);
             }
             return "";
     }
