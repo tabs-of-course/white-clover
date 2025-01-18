@@ -24,17 +24,21 @@ input_sender_context::input_sender_context(std::shared_ptr<message_channel> outb
 
 void input_sender_context::operator()() {
     std::cout << context_name << " thread started" << std::endl;
+    uint32_t last_processed_id = 0;  // Track message IDs 
 
     while (running) {
-        auto received = msg_receiver.receive_batch(10);
-        for (const auto& msg : received) {
-            // Check if this message is for us
-            if ((msg.target_process_id == process_id) && 
-                (msg.target_instance == -1 || msg.target_instance == instance_number)) {
-                process_message(msg);
+        auto msg = msg_receiver.receive_message();  
+        if (msg) {
+            std::cout << "\n" << context_name << " received message ID: " << msg->m_msg_id 
+                      << " (Last processed: " << last_processed_id << ")" << std::endl;
+
+            if ((msg->target_process_id == process_id) && 
+                (msg->target_instance == -1 || msg->target_instance == instance_number)) {
+                
+                process_message(*msg);
+                last_processed_id = msg->m_msg_id;
             }
         }
-        Sleep(1);
     }
 }
 
@@ -43,21 +47,26 @@ void input_sender_context::process_message(const message& msg) {
     char window_title[256];
     GetWindowTextA(target_hwnd, window_title, sizeof(window_title));
     
-    std::cout << "\nProcessing key in " << context_name << ":\n"
+    std::cout << "\nStarting to process key in " << context_name << " (Message ID: " << msg.m_msg_id << "):\n"
               << "  Key: " << msg.m_msg << "\n"
               << "  Target Window: 0x" << std::hex << (uintptr_t)target_hwnd << std::dec << "\n"
               << "  Window Title: " << window_title << "\n";
 
     messages_processed++;
 
-    // Check if it's a key press message
     if (msg.m_command == 2) {  // Command 2 is for key press events
-        // Extract key name from message (format: "Key pressed: X")
         size_t prefix_len = strlen("Key pressed: ");
         if (msg.m_msg.length() > prefix_len) {
             std::string key_name = msg.m_msg.substr(prefix_len);
             std::cout << "  Sending key '" << key_name << "' to window\n";
+            
+            auto start_time = std::chrono::high_resolution_clock::now();
             send_key_to_window(key_name);
+            auto end_time = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+            
+            std::cout << "Finished processing Message ID: " << msg.m_msg_id 
+                      << " (took " << duration.count() << "ms)" << std::endl;
         }
     }
 }
@@ -79,6 +88,8 @@ void input_sender_context::send_key_to_window(const std::string& key_name) {
     }
 }
 
+
+
 void input_sender_context::simulate_key_press(WORD vk_code) {
     UINT scan_code;
     if ((vk_code >= 'A' && vk_code <= 'Z') || (vk_code >= '0' && vk_code <= '9')) {
@@ -87,8 +98,8 @@ void input_sender_context::simulate_key_press(WORD vk_code) {
         scan_code = MapVirtualKeyW(vk_code, MAPVK_VK_TO_VSC);
     }
     
-    // Construct detailed lParam
-    LPARAM lParam = 1                     // Repeat count (bits 0-15)
+    // Construct detailed lParam for key down
+    LPARAM lParam_down = 1                // Repeat count (bits 0-15)
                     | (scan_code << 16)   // Scan code (bits 16-23)
                     | (0 << 24)           // Extended key flag
                     | (0 << 25)           // Don't care (bit 25)
@@ -99,16 +110,50 @@ void input_sender_context::simulate_key_press(WORD vk_code) {
                     | (0 << 30)           // Don't care (bit 30)
                     | (0 << 31);          // Don't care (bit 31)
 
-    std::cout << "Sending key 0x" << std::hex << vk_code 
-              << " with scan code 0x" << scan_code 
-              << " lParam: 0x" << lParam << std::dec << std::endl;
+    // Construct lParam for key up (set transition and previous state flags)
+    LPARAM lParam_up = lParam_down | (1 << 30) | (1 << 29);
 
-    // Send key down
-    SendMessageW(target_hwnd, WM_KEYDOWN, vk_code, lParam);
+    std::cout << "Posting key 0x" << std::hex << vk_code 
+              << " with scan code 0x" << scan_code 
+              << " down_lParam: 0x" << lParam_down
+              << " up_lParam: 0x" << lParam_up << std::dec << std::endl;
+
+    // PostMessage(target_hwnd, WM_KEYDOWN, vk_code, lParam_down);
+    // Sleep(50);  // Small delay between down and up
+    PostMessage(target_hwnd, WM_KEYUP, vk_code, lParam_up);
+}
+
+void input_sender_context::simulate_key_combination(const std::vector<WORD>& vk_codes) {
+    std::cout << "Simulating key combination of " << vk_codes.size() << " keys" << std::endl;
     
-    // Set transition and previous state flags for key up
-    lParam |= (1 << 30) | (1 << 29);
-    SendMessageW(target_hwnd, WM_KEYUP, vk_code, lParam);
+    // First, prepare all lParams
+    std::vector<std::pair<LPARAM, LPARAM>> key_params;
+    for (WORD vk_code : vk_codes) {
+        UINT scan_code;
+        if ((vk_code >= 'A' && vk_code <= 'Z') || (vk_code >= '0' && vk_code <= '9')) {
+            scan_code = MapVirtualKeyW(vk_code, MAPVK_VK_TO_VSC_EX);
+        } else {
+            scan_code = MapVirtualKeyW(vk_code, MAPVK_VK_TO_VSC);
+        }
+
+        LPARAM lParam_down = 1 | (scan_code << 16);
+        LPARAM lParam_up = lParam_down | (1 << 30) | (1 << 29);
+        key_params.push_back({lParam_down, lParam_up});
+    }
+
+    // Send all key down messages
+    for (size_t i = 0; i < vk_codes.size(); i++) {
+        PostMessage(target_hwnd, WM_KEYDOWN, vk_codes[i], key_params[i].first);
+        Sleep(50);
+    }
+
+    Sleep(100);  // Hold the combination
+
+    // Send all key up messages in reverse order
+    for (size_t i = vk_codes.size(); i > 0; i--) {
+        PostMessage(target_hwnd, WM_KEYUP, vk_codes[i-1], key_params[i-1].second);
+        Sleep(50);
+    }
 }
 
 WORD input_sender_context::get_virtual_key_code(const std::string& key_name) {

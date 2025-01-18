@@ -60,10 +60,12 @@ HWND ProcessManager::findNewWindow(const std::vector<WindowInfo>& before_windows
 bool ProcessManager::launchProcess(const ProcessConfig& config, int instance_num) {
     std::cout << "Launching process: " << config.id 
               << " instance " << instance_num 
-              << " path: " << config.executable_path << "\n";
+              << " path: " << config.executable_path 
+              << " window_sequence: " << config.window_sequence << "\n";
 
-    // Get list of windows before launch
-    auto before_windows = getAllWindows();
+    // Get base list of windows before launch
+    auto base_windows = getAllWindows();
+    std::cout << "Base window count: " << base_windows.size() << "\n";
 
     // Initialize process structures
     STARTUPINFOW si = {};
@@ -71,60 +73,164 @@ bool ProcessManager::launchProcess(const ProcessConfig& config, int instance_num
     si.dwFlags = STARTF_USESHOWWINDOW;
     si.wShowWindow = SW_SHOW;
 
-    PROCESS_INFORMATION pi = {
-        NULL,               // hProcess
-        NULL,               // hThread
-        0,                  // dwProcessId
-        0                   // dwThreadId
-    };
+    PROCESS_INFORMATION pi = {};
 
-    // Convert executable path and arguments to wide string
-    std::wstring wide_path(config.executable_path.begin(), config.executable_path.end());
-    
+    // Convert executable path to wide string
+    std::filesystem::path exePath(config.executable_path);
+    std::wstring wide_path = exePath.wstring();
+    std::wstring workingDir = exePath.parent_path().wstring();
+
     // Create command line including arguments
-    std::string cmd_line = config.executable_path;
+    std::string cmd_line = "\"" + config.executable_path + "\"";
     for (const auto& arg : config.args) {
-        cmd_line += " " + arg;
+        cmd_line += " \"" + arg + "\"";
     }
-    std::cout << "Command line: " << cmd_line << "\n";
+    std::cout << "Command line: " << cmd_line << "\n"
+              << "Working directory: " << exePath.parent_path().string() << "\n";
     std::wstring wide_cmd_line(cmd_line.begin(), cmd_line.end());
 
     // Launch the process
     if (!CreateProcessW(
-            wide_path.c_str(),
-            wide_cmd_line.empty() ? nullptr : &wide_cmd_line[0],
-            nullptr, nullptr, FALSE, 0, nullptr, nullptr,
-            &si, &pi)) {
-        std::cout << "Failed to create process. Error: " << GetLastError() << "\n";
+            wide_path.c_str(),                    // Application name
+            wide_cmd_line.empty() ? nullptr : &wide_cmd_line[0],  // Command line
+            nullptr,                              // Process security attributes
+            nullptr,                              // Thread security attributes
+            FALSE,                                // Inherit handles
+            CREATE_DEFAULT_ERROR_MODE,            // Creation flags
+            nullptr,                              // Environment
+            workingDir.c_str(),                   // Working directory
+            &si,                                  // Startup info
+            &pi)) {                               // Process info
+        DWORD error = GetLastError();
+        std::cout << "Failed to create process. Error code: " << error 
+                  << " (0x" << std::hex << error << std::dec << ")\n";
         return false;
     }
 
-    std::cout << "Process created successfully!\n";
+    std::cout << "Process created successfully with:\n"
+              << "  Process ID: " << pi.dwProcessId << "\n"
+              << "  Thread ID: " << pi.dwThreadId << "\n"
+              << "  Working Dir: " << exePath.parent_path().string() << "\n";
+
+    // Check if process is still running
+    DWORD exitCode;
+    if (GetExitCodeProcess(pi.hProcess, &exitCode) && exitCode != STILL_ACTIVE) {
+        std::cout << "Process terminated immediately with exit code: " 
+                  << exitCode << " (0x" << std::hex << exitCode << std::dec << ")\n";
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+        return false;
+    }
     
     // Wait for process to initialize
-    WaitForInputIdle(pi.hProcess, 5000);
+    std::cout << "Waiting for process to initialize...\n";
+    DWORD waitResult = WaitForInputIdle(pi.hProcess, 5000);
+    if (waitResult == WAIT_FAILED) {
+        DWORD error = GetLastError();
+        std::cout << "WaitForInputIdle failed. Error: " << error 
+                  << " (0x" << std::hex << error << std::dec << ")\n";
+    } else if (waitResult == WAIT_TIMEOUT) {
+        std::cout << "WaitForInputIdle timed out after 5 seconds\n";
+    } else {
+        std::cout << "Process initialized successfully\n";
+    }
 
-    // Try to find the new window
-    HWND hwnd = nullptr;
-    for (int attempt = 0; attempt < 10 && !hwnd; attempt++) {
-        std::cout << "Searching for new window, attempt " << (attempt + 1) << "\n";
-        hwnd = findNewWindow(before_windows);
-        if (!hwnd) {
-            Sleep(500);
+    HWND target_window = nullptr;
+    
+    for (int sequence = 1; sequence <= config.window_sequence; sequence++) {
+        bool window_found = false;
+        std::cout << "Looking for window " << sequence << " in sequence\n";
+        
+        for (int attempt = 0; attempt < 60 && !window_found; attempt++) {
+            if (attempt % 5 == 0) {
+                std::cout << "Searching for window sequence " << sequence << ", attempt " << (attempt + 1) << "\n";
+            }
+            
+            auto current_windows = getAllWindows();
+            std::cout << "Current window count: " << current_windows.size() << "\n";
+            
+            // For sequence 3, let's log ALL windows to see what's happening
+            if (sequence == 3) {
+                std::cout << "Current windows during sequence 3:\n";
+                for (const auto& win : current_windows) {
+                    std::cout << "Window:\n"
+                            << "  Handle: 0x" << std::hex << (uintptr_t)win.handle << std::dec << "\n"
+                            << "  Title: " << win.title << "\n"
+                            << "  Class: " << win.class_name << "\n";
+                }
+                std::cout << "\nBase windows for comparison:\n";
+                for (const auto& base : base_windows) {
+                    std::cout << "Base Window:\n"
+                            << "  Handle: 0x" << std::hex << (uintptr_t)base.handle << std::dec << "\n"
+                            << "  Title: " << base.title << "\n"
+                            << "  Class: " << base.class_name << "\n";
+                }
+            }
+            
+            // Find the one window that's not in our base list
+            for (const auto& current : current_windows) {
+                bool is_new = true;
+                
+                // Check against base windows
+                for (const auto& base : base_windows) {
+                    if (current.handle == base.handle) {
+                        is_new = false;
+                        break;
+                    }
+                }
+                
+                if (is_new) {
+                    std::cout << "Found sequence " << sequence << " window:\n"
+                            << "  Handle: 0x" << std::hex << (uintptr_t)current.handle << std::dec << "\n"
+                            << "  Title: " << current.title << "\n"
+                            << "  Class: " << current.class_name << "\n";
+
+                    window_found = true;
+
+                    if (sequence < config.window_sequence) {
+                        std::cout << "Sending Enter key to window " << sequence << "\n";
+                        Sleep(500);
+                        PostMessage(current.handle, WM_KEYDOWN, VK_RETURN, 0x001C0001);
+                        Sleep(100);
+                        PostMessage(current.handle, WM_KEYUP, VK_RETURN, 0xC01C0001);
+                        Sleep(5000);
+                    }
+                    
+                    if (sequence == config.window_sequence) {
+                        target_window = current.handle;
+                    }
+                    
+                    break;
+                }
+            }
+            
+            if (!window_found) {
+                Sleep(13500);
+            }
+        }
+        
+        if (!window_found) {
+            std::cout << "Failed to find window " << sequence << " in sequence after all attempts\n";
+            return false;
         }
     }
 
-    if (!hwnd) {
-        std::cerr << "Failed to find new window\n";
+    if (!target_window) {
+        std::cerr << "Failed to get target window\n";
+        DWORD exitCode;
+        if (GetExitCodeProcess(pi.hProcess, &exitCode)) {
+            std::cout << "Final process state - Exit code: " 
+                      << exitCode << " (0x" << std::hex << exitCode << std::dec << ")\n";
+        }
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
         return false;
     }
 
-    // Store the process information
+    // Store the process information with the final window handle
     ProcessInstance instance{
         pi.hProcess,
-        hwnd,
+        target_window,
         config.id,
         instance_num
     };
@@ -134,19 +240,29 @@ bool ProcessManager::launchProcess(const ProcessConfig& config, int instance_num
 
     std::cout << "Successfully launched " << config.id 
               << " instance " << instance_num 
-              << " (HWND: 0x" << std::hex << (uintptr_t)hwnd << std::dec << ")" << std::endl;
+              << " (HWND: 0x" << std::hex << (uintptr_t)target_window << std::dec << ")" << std::endl;
     return true;
 }
 
 BOOL CALLBACK ProcessManager::enumWindowCallback(HWND handle, LPARAM param) {
     auto* args = reinterpret_cast<EnumWindowsCallbackArgs*>(param);
 
-    // Check if window is visible and has a caption
+    // Check if window is visible
     BOOL is_visible = IsWindowVisible(handle);
-    LONG styles = GetWindowLong(handle, GWL_STYLE);
-    BOOL has_caption = (styles & WS_CAPTION) != 0;
+    if (!is_visible) {
+        return TRUE;
+    }
 
-    if (!is_visible || !has_caption) {
+    // Get window styles
+    LONG styles = GetWindowLong(handle, GWL_STYLE);
+    
+    // Accept either:
+    // 1. Windows with captions (regular windows)
+    // 2. Borderless windows (typically fullscreen games)
+    BOOL has_caption = (styles & WS_CAPTION) != 0;
+    BOOL is_borderless = (styles & WS_POPUP) != 0;  // Borderless windows often use WS_POPUP
+    
+    if (!has_caption && !is_borderless) {
         return TRUE;
     }
 

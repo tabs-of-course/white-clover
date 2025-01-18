@@ -11,6 +11,7 @@ struct ProcessConfig {
     std::string executable_path;
     std::vector<std::string> args;
     int instances;
+    int window_sequence;  
 };
 
 struct KeyBinding {
@@ -18,6 +19,8 @@ struct KeyBinding {
     std::string target_process;
     std::optional<int> instance;
 };
+
+
 
 class SettingsManager {
 public:

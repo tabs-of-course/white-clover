@@ -1,63 +1,50 @@
 {
     "processes": [
         {
-            "id": "notepad1",
-            "path": "C:/Windows/System32/notepad.exe",
+            "id": "ao1",
+            "path": "C:/Funcom/AO/Anarchy.exe",
             "instances": 1,
-            "args": []
+            "args": [],
+            "window_sequence": 3
         },
         {
-            "id": "notepad2",
-            "path": "C:/Windows/System32/notepad.exe",
+            "id": "ao2",
+            "path": "C:/Funcom/AO/Anarchy.exe",
             "instances": 1,
-            "args": []
+            "args": [],
+            "window_sequence": 3
         }
     ],
     
     "key_bindings": [
         {
             "key": "1",
-            "process": "notepad1",
+            "process": "ao1",
             "instance": 0
         },
         {
             "key": "2",
-            "process": "notepad1",
+            "process": "ao1",
             "instance": 0
         },
         {
             "key": "3",
-            "process": "notepad1",
+            "process": "ao1",
             "instance": 0
         },
         {
             "key": "4",
-            "process": "notepad2",
+            "process": "ao2",
             "instance": 0
         },
         {
             "key": "5",
-            "process": "notepad2",
+            "process": "ao2",
             "instance": 0
         },
         {
             "key": "6",
-            "process": "notepad2",
-            "instance": 0
-        },
-        {
-            "key": "Enter",
-            "process": "notepad1",
-            "instance": 0
-        },
-        {
-            "key": "Space",
-            "process": "notepad2",
-            "instance": 0
-        },
-        {
-            "key": "Backspace",
-            "process": "notepad2",
+            "process": "ao2",
             "instance": 0
         }
     ]

@@ -22,10 +22,17 @@ public:
     
     bool add_input_sender_context(const std::string& process_id, int instance) override;
     bool remove_input_sender_context(const std::string& process_id, int instance) override;
+    
+    // Add getter for input channels
+    static std::shared_ptr<message_channel> get_input_channel(const std::string& context_id) {
+        auto it = input_channels.find(context_id);
+        return (it != input_channels.end()) ? it->second : nullptr;
+    }
 
 private:
     std::unique_ptr<i_thread_context> key_monitor_context;
-    std::shared_ptr<message_channel> key_monitor_outbound;  // Add this line
+    std::shared_ptr<message_channel> key_monitor_outbound;
     std::unordered_map<std::string, ContextInfo> input_contexts;
+    static std::unordered_map<std::string, std::shared_ptr<message_channel>> input_channels;
     std::atomic<bool> running{true};
 };

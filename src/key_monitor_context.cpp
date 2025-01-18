@@ -1,5 +1,6 @@
 #include "key_monitor_context.h"
 #include "settings_manager.h"
+#include "thread_manager.h"
 #include <iostream>
 #include <sstream>
 
@@ -18,43 +19,44 @@ void key_monitor_context::operator()() {
     std::cout << "Key monitor thread started - Monitoring for key presses..." << std::endl;
     uint32_t msg_id = 0;
 
-    // Get key bindings
     const auto& key_bindings = SettingsManager::getInstance().getKeyBindings();
-
-    // Array to store key states
     bool previous_state[256] = {false};
 
     while (running) {
-        // Check each key
         for (int vk = 0; vk < 256; vk++) {
             bool current_state = (GetAsyncKeyState(vk) & 0x8000) != 0;
-
-            // Detect key press (transition from not pressed to pressed)
+            
             if (current_state && !previous_state[vk]) {
                 std::string key_name = get_key_name(vk);
                 if (!key_name.empty()) {
-                    std::cout << "\nKey detected:\n"
-                             << "  Virtual Key: 0x" << std::hex << vk << std::dec << "\n"
-                             << "  Key Name: " << key_name << "\n";
-
-                    // Find matching key binding
                     for (const auto& binding : key_bindings) {
                         if (binding.key == key_name) {
-                            // Create and send message with routing information
-                            message key_msg(2, msg_id++, "Key pressed: " + key_name,
-                                         binding.target_process, 
-                                         binding.instance.value_or(-1));
-
-                            if (msg_sender.send_message(key_msg)) {
-                                messages_sent++;
-                                keys_processed++;
-                                std::cout << "  Message sent to process " 
-                                          << binding.target_process 
-                                          << " instance " 
-                                          << (binding.instance.has_value() ? std::to_string(binding.instance.value()) : "all")
-                                          << " (ID: " << msg_id - 1 << ")\n";
+                            // Get correct channel for target process
+                            std::ostringstream oss;
+                            oss << binding.target_process << ":" 
+                                << (binding.instance.has_value() ? binding.instance.value() : 0);
+                            std::string target_id = oss.str();
+                            
+                            auto channel = thread_manager::get_input_channel(target_id);
+                            if (channel) {
+                                message key_msg(2, msg_id++, "Key pressed: " + key_name,
+                                             binding.target_process,
+                                             binding.instance.value_or(-1));
+                                
+                                sender target_sender(channel, running);
+                                if (target_sender.send_message(key_msg)) {
+                                    messages_sent++;
+                                    keys_processed++;
+                                    std::cout << "Key detected:\n"
+                                              << "  Virtual Key: 0x" << std::hex << vk << std::dec << "\n"
+                                              << "  Key Name: " << key_name << "\n"
+                                              << "  Message sent to process " << binding.target_process 
+                                              << " instance " << (binding.instance.has_value() ? 
+                                                  std::to_string(binding.instance.value()) : "all")
+                                              << " (ID: " << msg_id - 1 << ")\n";
+                                }
                             }
-                            break;  // Found the binding, no need to check others
+                            break;
                         }
                     }
                 }

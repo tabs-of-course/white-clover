@@ -45,4 +45,5 @@ private:
     void send_key_to_window(const std::string& key_name);
     WORD get_virtual_key_code(const std::string& key_name);
     void simulate_key_press(WORD vk_code);
+    void simulate_key_combination(const std::vector<WORD>& vk_codes);
 };

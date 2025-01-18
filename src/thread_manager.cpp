@@ -5,6 +5,8 @@
 #include <iostream>
 #include <sstream>
 
+std::unordered_map<std::string, std::shared_ptr<message_channel>> thread_manager::input_channels;
+
 thread_manager::thread_manager() {
     // Create the key monitor context with its channels
     auto monitor_outbound = std::make_shared<message_channel>();
@@ -21,6 +23,9 @@ thread_manager::thread_manager() {
     
     monitor->set_name("KeyMonitor");
     key_monitor_context = std::move(monitor);
+
+    // Clear any existing channels
+    input_channels.clear();
 }
 
 thread_manager::~thread_manager() {
@@ -64,18 +69,15 @@ void thread_manager::stop_threads() {
 }
 
 bool thread_manager::add_input_sender_context(const std::string& process_id, int instance) {
-    // Create a unique identifier for this context
     std::ostringstream oss;
     oss << process_id << ":" << instance;
     std::string context_id = oss.str();
     
-    // Check if context already exists
     if (input_contexts.find(context_id) != input_contexts.end()) {
         std::cerr << "Context already exists for " << context_id << std::endl;
         return false;
     }
     
-    // Get window handle from process manager
     HWND hwnd = ProcessManager::getInstance().get_window_handle(process_id, instance);
     if (!hwnd) {
         std::cerr << "Failed to get window handle for " << context_id << std::endl;
@@ -84,23 +86,24 @@ bool thread_manager::add_input_sender_context(const std::string& process_id, int
     
     std::cout << "Adding input sender context for " << context_id << std::endl;
     
-    // Create outbound channel (though we might not use it)
-    auto to_input = std::make_shared<message_channel>();
+    // Create dedicated inbound channel for this input sender
+    auto inbound_channel = std::make_shared<message_channel>();
+    input_channels[context_id] = inbound_channel;  // Store for key monitor to use
     
-    // Create input sender context with process ID and instance
+    auto outbound = std::make_shared<message_channel>();
+    
     auto input_context = std::make_unique<input_sender_context>(
-        to_input,                // Outbound channel
-        key_monitor_outbound,    // Use key monitor's outbound as inbound
+        outbound,
+        inbound_channel,     // Use dedicated inbound channel
         running,
         hwnd,
-        process_id,              // Pass process ID
-        instance                 // Pass instance number
+        process_id,
+        instance
     );
     input_context->set_name("InputSender_" + context_id);
     
-    // Store context info
     ContextInfo info{
-        to_input,
+        outbound,
         std::move(input_context)
     };
     
@@ -124,8 +127,10 @@ bool thread_manager::remove_input_sender_context(const std::string& process_id, 
         it->second.context->stop();
     }
     
-    // Remove the context
+    // Remove from both maps
     input_contexts.erase(it);
+    input_channels.erase(context_id);
+    
     return true;
 }
 
