@@ -45,60 +45,76 @@ fs::path SettingsManager::getSettingsPath() const {
 }
 
 bool SettingsManager::loadSettings(const fs::path& filepath) {
-   try {
-       std::cout << "Loading settings from: " << filepath << "\n";
-       std::ifstream file(filepath);
-       if (!file.is_open()) {
-           std::cerr << "Failed to open settings file\n";
-           return false;
-       }
+    try {
+        std::cout << "Loading settings from: " << filepath << "\n";
+        std::ifstream file(filepath);
+        if (!file.is_open()) {
+            std::cerr << "Failed to open settings file\n";
+            return false;
+        }
 
-       std::cout << "Reading JSON content...\n";
-       nlohmann::json json;
-       file >> json;
+        std::cout << "Reading JSON content...\n";
+        nlohmann::json json;
+        file >> json;
 
-       // Clear existing configurations
-       process_configs.clear();
-       key_bindings.clear();
+        // Clear existing configurations
+        process_configs.clear();
+        key_bindings.clear();
 
-       // Parse process configurations
-       for (const auto& proc : json["processes"]) {
-           ProcessConfig config;
-           config.id = proc["id"].get<std::string>();
-           config.executable_path = proc["path"].get<std::string>();
-           config.instances = proc["instances"].get<int>();
-           config.window_sequence = proc["window_sequence"].get<int>();
-           
-           if (proc.contains("args")) {
-               config.args = proc["args"].get<std::vector<std::string>>();
-           }
-           
-           process_configs.push_back(config);
-           std::cout << "Added process config: " << config.id 
-                     << " with window_sequence: " << config.window_sequence << "\n";
-       }
+        // Parse process configurations
+        for (const auto& proc : json["processes"]) {
+            ProcessConfig config;
+            config.id = proc["id"].get<std::string>();
+            config.executable_path = proc["path"].get<std::string>();
+            config.instances = proc["instances"].get<int>();
+            config.window_sequence = proc["window_sequence"].get<int>();
+            
+            if (proc.contains("args")) {
+                config.args = proc["args"].get<std::vector<std::string>>();
+            }
+            
+            process_configs.push_back(config);
+            std::cout << "Added process config: " << config.id 
+                      << " with window_sequence: " << config.window_sequence << "\n";
+        }
 
-       // Parse key bindings
-       for (const auto& binding : json["key_bindings"]) {
-           KeyBinding kb;
-           kb.key = binding["key"].get<std::string>();
-           kb.target_process = binding["process"].get<std::string>();
-           
-           if (binding.contains("instance")) {
-               kb.instance = binding["instance"].get<int>();
-           }
-           
-           key_bindings.push_back(kb);
-           std::cout << "Added key binding: " << kb.key << " -> " << kb.target_process << "\n";
-       }
+        // Parse key bindings
+        for (const auto& binding : json["key_bindings"]) {
+            KeyBinding kb;
+            kb.trigger_key = binding["trigger_key"].get<std::string>();
+            
+            // Parse sequences
+            for (const auto& seq : binding["sequences"]) {
+                KeySequence sequence;
+                sequence.target_process = seq["process"].get<std::string>();
+                sequence.instance = seq["instance"].get<int>();
+                
+                // Parse actions
+                for (const auto& action : seq["actions"]) {
+                    KeyAction ka;
+                    ka.key = action["key"].get<std::string>();
+                    if (action.contains("delay")) {
+                        ka.delay = action["delay"].get<int>();
+                    }
+                    sequence.actions.push_back(ka);
+                }
+                
+                kb.sequences.push_back(sequence);
+            }
+            
+            key_bindings.push_back(kb);
+            std::cout << "Added key binding for trigger: " << kb.trigger_key 
+                      << " with " << kb.sequences.size() << " sequences\n";
+        }
 
-       return true;
-   }
-   catch (const std::exception& e) {
-       std::cerr << "Error parsing settings file: " << e.what() << std::endl;
-       return false;
-   }
+        return true;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Error parsing settings file: " << e.what() << std::endl;
+        return false;
+    }
 }
+
 
 void SettingsManager::printSettings() const {
     std::cout << "\n=== Current Settings ===\n";
@@ -116,10 +132,19 @@ void SettingsManager::printSettings() const {
 
     std::cout << "\nKey Bindings (" << key_bindings.size() << "):\n";
     for (const auto& kb : key_bindings) {
-        std::cout << "  - Key: " << kb.key
-                  << "\n    Process: " << kb.target_process
-                  << "\n    Instance: " << (kb.instance ? std::to_string(*kb.instance) : "all")
-                  << "\n";
+        std::cout << "  - Trigger Key: " << kb.trigger_key << "\n";
+        for (const auto& seq : kb.sequences) {
+            std::cout << "    Process: " << seq.target_process
+                      << " (Instance " << seq.instance << ")\n";
+            std::cout << "    Actions:\n";
+            for (const auto& action : seq.actions) {
+                std::cout << "      Key: " << action.key;
+                if (action.delay > 0) {
+                    std::cout << " (Delay: " << action.delay << "ms)";
+                }
+                std::cout << "\n";
+            }
+        }
     }
     std::cout << "====================\n\n";
 }

@@ -9,10 +9,11 @@
 #include "i_process_manager.h"
 
 struct ProcessInstance {
-    HANDLE process_handle;
+    HANDLE process_handle;    // Will be nullptr for attached windows
     HWND window_handle;
     std::string id;
     int instance_number;
+    std::string window_title;
 };
 
 struct WindowInfo {
@@ -23,6 +24,8 @@ struct WindowInfo {
 
 struct EnumWindowsCallbackArgs {
     std::vector<WindowInfo>& windows;
+    const std::vector<ProcessConfig>& configs;
+    std::unordered_map<std::string, int>& instance_counts;
 };
 
 class ProcessManager : public i_process_manager {
@@ -38,10 +41,19 @@ public:
 
 private:
     ProcessManager() = default;
-    bool launchProcess(const ProcessConfig& config, int instance_num);
+    ~ProcessManager() = default;
+    ProcessManager(const ProcessManager&) = delete;
+    ProcessManager& operator=(const ProcessManager&) = delete;
+
+    // Window scanning functions
+    bool scan_and_attach_windows();
     static BOOL CALLBACK enumWindowCallback(HWND handle, LPARAM param);
-    HWND findNewWindow(const std::vector<WindowInfo>& before_windows) const;
     std::vector<WindowInfo> getAllWindows() const;
+
+    // Process launching functions
+    bool launchProcess(const ProcessConfig& config, int instance_num);
+    HWND findNewWindow(const std::vector<WindowInfo>& before_windows) const;
+    static BOOL CALLBACK enumWindowCallbackBasic(HWND handle, LPARAM param);
     
     std::vector<ProcessInstance> process_instances;
 };

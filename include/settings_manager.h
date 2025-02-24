@@ -7,20 +7,29 @@
 #include <filesystem>
 
 struct ProcessConfig {
-    std::string id;
-    std::string executable_path;
-    std::vector<std::string> args;
-    int instances;
-    int window_sequence;  
+    std::string id;                      // Identifier to match in window title
+    int instances;                       // Maximum number of instances to look for
+    bool auto_launch;                    // Whether to launch if window not found
+    std::string executable_path;         // Path to executable (only used if auto_launch is true)
+    std::vector<std::string> args;       // Launch arguments (only used if auto_launch is true)
+    int window_sequence;                 // Number of windows in sequence (only used if auto_launch is true)
+};
+
+struct KeyAction {
+    std::string key;
+    int delay{0};  // Delay in milliseconds after this key press
+};
+
+struct KeySequence {
+    std::string target_process;
+    int instance{0};
+    std::vector<KeyAction> actions;
 };
 
 struct KeyBinding {
-    std::string key;
-    std::string target_process;
-    std::optional<int> instance;
+    std::string trigger_key;
+    std::vector<KeySequence> sequences;
 };
-
-
 
 class SettingsManager {
 public:

@@ -30,33 +30,43 @@ void key_monitor_context::operator()() {
                 std::string key_name = get_key_name(vk);
                 if (!key_name.empty()) {
                     for (const auto& binding : key_bindings) {
-                        if (binding.key == key_name) {
-                            // Get correct channel for target process
-                            std::ostringstream oss;
-                            oss << binding.target_process << ":" 
-                                << (binding.instance.has_value() ? binding.instance.value() : 0);
-                            std::string target_id = oss.str();
-                            
-                            auto channel = thread_manager::get_input_channel(target_id);
-                            if (channel) {
-                                message key_msg(2, msg_id++, "Key pressed: " + key_name,
-                                             binding.target_process,
-                                             binding.instance.value_or(-1));
+                        if (binding.trigger_key == key_name) {
+                            // Process all sequences for this trigger key
+                            for (const auto& sequence : binding.sequences) {
+                                // Get correct channel for target process
+                                std::ostringstream oss;
+                                oss << sequence.target_process << ":" << sequence.instance;
+                                std::string target_id = oss.str();
                                 
-                                sender target_sender(channel, running);
-                                if (target_sender.send_message(key_msg)) {
-                                    messages_sent++;
-                                    keys_processed++;
-                                    std::cout << "Key detected:\n"
-                                              << "  Virtual Key: 0x" << std::hex << vk << std::dec << "\n"
-                                              << "  Key Name: " << key_name << "\n"
-                                              << "  Message sent to process " << binding.target_process 
-                                              << " instance " << (binding.instance.has_value() ? 
-                                                  std::to_string(binding.instance.value()) : "all")
-                                              << " (ID: " << msg_id - 1 << ")\n";
+                                auto channel = thread_manager::get_input_channel(target_id);
+                                if (channel) {
+                                    // Send each action in the sequence
+                                    for (const auto& action : sequence.actions) {
+                                        message key_msg(2, msg_id++, "Key pressed: " + action.key,
+                                                     sequence.target_process,
+                                                     sequence.instance);
+                                        
+                                        sender target_sender(channel, running);
+                                        if (target_sender.send_message(key_msg)) {
+                                            messages_sent++;
+                                            keys_processed++;
+                                            std::cout << "Key sequence action:\n"
+                                                      << "  Trigger: " << key_name << "\n"
+                                                      << "  Action Key: " << action.key << "\n"
+                                                      << "  Process: " << sequence.target_process << "\n"
+                                                      << "  Instance: " << sequence.instance << "\n"
+                                                      << "  Message ID: " << msg_id - 1;
+                                            
+                                            if (action.delay > 0) {
+                                                std::cout << "\n  Delay: " << action.delay << "ms";
+                                                Sleep(action.delay);
+                                            }
+                                            std::cout << std::endl;
+                                        }
+                                    }
                                 }
                             }
-                            break;
+                            break;  // Found the trigger key binding, no need to check others
                         }
                     }
                 }

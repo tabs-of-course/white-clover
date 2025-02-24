@@ -118,9 +118,9 @@ void input_sender_context::simulate_key_press(WORD vk_code) {
               << " down_lParam: 0x" << lParam_down
               << " up_lParam: 0x" << lParam_up << std::dec << std::endl;
 
-    // PostMessage(target_hwnd, WM_KEYDOWN, vk_code, lParam_down);
-    // Sleep(50);  // Small delay between down and up
-    PostMessage(target_hwnd, WM_KEYUP, vk_code, lParam_up);
+    SendMessage(target_hwnd, WM_KEYDOWN, vk_code, lParam_down);
+    Sleep(50);  // Small delay between down and up
+    SendMessage(target_hwnd, WM_KEYUP, vk_code, lParam_up);
 }
 
 void input_sender_context::simulate_key_combination(const std::vector<WORD>& vk_codes) {

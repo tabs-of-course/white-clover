@@ -1,16 +1,42 @@
 {
     "processes": [
         {
-            "id": "ao1",
-            "path": "C:/Funcom/AO/Anarchy.exe",
+            "id": "Lookaway",
             "instances": 1,
+            "auto_launch": true,
+            "path": "C:/Funcom/AO/Anarchy.exe",
             "args": [],
             "window_sequence": 3
         },
         {
-            "id": "ao2",
-            "path": "C:/Funcom/AO/Anarchy.exe",
+            "id": "Breakaleg",
             "instances": 1,
+            "auto_launch": true,
+            "path": "C:/Funcom/AO/Anarchy.exe",
+            "args": [],
+            "window_sequence": 3
+        },
+        {
+            "id": "Whinx",
+            "instances": 1,
+            "auto_launch": true,
+            "path": "C:/Funcom/AO/Anarchy.exe",
+            "args": [],
+            "window_sequence": 3
+        },
+        {
+            "id": "Karer",
+            "instances": 1,
+            "auto_launch": true,
+            "path": "C:/Funcom/AO/Anarchy.exe",
+            "args": [],
+            "window_sequence": 3
+        },
+        {
+            "id": "Nachorule",
+            "instances": 1,
+            "auto_launch": true,
+            "path": "C:/Funcom/AO/Anarchy.exe",
             "args": [],
             "window_sequence": 3
         }
@@ -18,34 +44,86 @@
     
     "key_bindings": [
         {
-            "key": "1",
-            "process": "ao1",
-            "instance": 0
+            "trigger_key": "1",
+            "sequences": [
+                {
+                    "process": "ao5",
+                    "instance": 0,
+                    "actions": [
+                        { "key": "","delay": 800 },
+                        { "key": "5", "delay": 500 },
+                        { "key": "4", "delay": 200 },
+                        { "key": "1", "delay": 200 },
+                        { "key": "5"}
+                    ]
+                },
+                {
+                    "process": "ao4",
+                    "instance": 0,
+                    "actions": [
+                        { "key": "","delay": 800 },
+                        { "key": "5", "delay": 500 },
+                        { "key": "4", "delay": 200 },
+                        { "key": "1", "delay": 200 },
+                        { "key": "5"}
+                    ]
+                },
+                {
+                    "process": "ao3",
+                    "instance": 0,
+                    "actions": [
+                        { "key": "","delay": 800 },
+                        { "key": "5", "delay": 500 },
+                        { "key": "1", "delay": 200 },
+                        { "key": "5"}
+                    ]
+                },
+                {
+                    "process": "ao2",
+                    "instance": 0,
+                    "actions": [
+                        { "key": "","delay": 800 },
+                        { "key": "5", "delay": 500 },
+                        { "key": "1", "delay": 200 },
+                        { "key": "5"}
+                    ]
+                }
+            ]
         },
         {
-            "key": "2",
-            "process": "ao1",
-            "instance": 0
-        },
-        {
-            "key": "3",
-            "process": "ao1",
-            "instance": 0
-        },
-        {
-            "key": "4",
-            "process": "ao2",
-            "instance": 0
-        },
-        {
-            "key": "5",
-            "process": "ao2",
-            "instance": 0
-        },
-        {
-            "key": "6",
-            "process": "ao2",
-            "instance": 0
+            "trigger_key": "3",
+            "sequences": [
+                {
+                    "process": "ao5",
+                    "instance": 0,
+                    "actions": [
+                        { "key": "0", "delay": 600 },
+                        { "key": "9"}
+                    ]
+                },
+                {
+                    "process": "ao4",
+                    "instance": 0,
+                    "actions": [
+                        { "key": "0", "delay": 600 },
+                        { "key": "9"}
+                    ]
+                },
+                {
+                    "process": "ao3",
+                    "instance": 0,
+                    "actions": [
+                        { "key": "9"}
+                    ]
+                },
+                {
+                    "process": "ao2",
+                    "instance": 0,
+                    "actions": [
+                        { "key": "9"}
+                    ]
+                }
+            ]
         }
     ]
 }
